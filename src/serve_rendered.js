@@ -591,10 +591,8 @@ module.exports = function(options, repo, params, id, dataResolver) {
                         [markerImages[0], precisePx(path[0],z).map(function(loc,idx){ return (idx ==1)? loc - markerSize/2: loc - markerSize/2;})],
                         [markerImages[1], precisePx(path[path.length-1],z).map(function(loc,idx){ return (idx == 1)?loc - markerSize/2: loc - markerSize/2;})]
                     ];
-        console.log(markers);
 
         markers.forEach(function(imgSpec){
-            console.log(imgSpec);
             var coordinates = imgSpec[1];
             ctx.drawImage(imgSpec[0], coordinates[0], coordinates[1], markerSize, markerSize);
         });
