@@ -270,7 +270,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
   var markerImageNames = ['pickup','dropoff'];
 
   markerImageNames.forEach(function(imageName){
-      var imageData = fs.readFileSync("./" + imageName + "-marker.png");
+      var imageData = fs.readFileSync(path.join(__dirname, "../public/resources/images/") + imageName + "-marker.png");
       // TODO: HANDLE ERROR!
       var mkrImage = new Canvas.Image();
       mkrImage.src = imageData;
