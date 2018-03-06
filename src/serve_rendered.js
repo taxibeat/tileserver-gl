@@ -245,7 +245,21 @@ module.exports = function(options, repo, params, id, dataResolver) {
     styleJSON.glyphs = 'fonts://' + styleJSON.glyphs;
   }
 
-  let tileJSON = {
+  var markerImages = [];
+
+  var markerImageNames = ['pickup','dropoff'];
+
+  markerImageNames.forEach(function(imageName){
+      var imageData = fs.readFileSync("./" + imageName + "-marker.png");
+      // TODO: HANDLE ERROR!
+      var mkrImage = new Canvas.Image();
+      mkrImage.src = imageData;
+      markerImages.push(mkrImage);
+  });
+
+
+
+  var tileJSON = {
     'tilejson': '2.0.0',
     'name': styleJSON.name,
     'attribution': '',
@@ -585,9 +599,19 @@ module.exports = function(options, repo, params, id, dataResolver) {
     }
 
     if (query.showMarkers && query.showMarkers == 1) {
-      // Add the markers, if requested to do so.
-      drawMarker(ctx, precisePx(path[path.length - 1], z), scale, "rgba(100, 206, 172, .9)");
-      drawMarker(ctx, precisePx(path[0], z), scale, "rgba(0, 0, 0, .9)");
+        // Add the markers, if requested to do so.
+
+        var markers = [
+                        [markerImages[0], precisePx(path[0],z).map(function(loc,idx){ return (idx ==1)? loc - markerSize/2: loc - markerSize/2;})],
+                        [markerImages[1], precisePx(path[path.length-1],z).map(function(loc,idx){ return (idx == 1)?loc - markerSize/2: loc - markerSize/2;})]
+                    ];
+        console.log(markers);
+
+        markers.forEach(function(imgSpec){
+            console.log(imgSpec);
+            var coordinates = imgSpec[1];
+            ctx.drawImage(imgSpec[0], coordinates[0], coordinates[1], markerSize, markerSize);
+        });
     }
 
     return canvas.toBuffer();
