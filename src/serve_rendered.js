@@ -266,18 +266,25 @@ module.exports = function(options, repo, params, id, dataResolver) {
   }
 
   var markerImages = [];
-
   var markerImageNames = ['pickup','dropoff'];
 
-  markerImageNames.forEach(function(imageName){
-      var imageData = fs.readFileSync(path.join(__dirname, "../public/resources/images/") + imageName + "-marker.png");
-      // TODO: HANDLE ERROR!
-      var mkrImage = new Canvas.Image();
-      mkrImage.src = imageData;
-      markerImages.push(mkrImage);
+
+  var markerLoadPromise = new Promise(function(resolveCallback, rejectCallback) {
+
+      markerImageNames.forEach(function(imageName){
+          fs.readFile(path.join(__dirname, "../public/resources/images/") + imageName + '-marker.png', function(err, fileData) {
+
+              if (err) {
+                 rejectCallback(err);
+              }
+
+              var mkrImage = new Canvas.Image();
+              mkrImage.src = fileData;
+              markerImages.push(mkrImage);
+          });
+      });
+      resolveCallback();
   });
-
-
 
   var tileJSON = {
     'tilejson': '2.0.0',
@@ -781,7 +788,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
     return res.send(info);
   });
 
-  return Promise.all([fontListingPromise, renderersReadyPromise]).then(function() {
+  return Promise.all([markerLoadPromise, fontListingPromise, renderersReadyPromise]).then(function() {
     return app;
   });
 
