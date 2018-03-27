@@ -25,8 +25,6 @@ var packageJson = require('../package'),
     avgresp = require('./avgresp'),
     prometheus = require('prom-client');
 
-var sprintf = require("sprintf-js").sprintf;
-
 prometheus.collectDefaultMetrics({ timeout: 5000 });
 
 var isLight = packageJson.name.slice(-6) == '-light';
