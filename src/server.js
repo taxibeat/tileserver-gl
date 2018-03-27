@@ -21,7 +21,8 @@ var packageJson = require('../package'),
     serve_rendered = null,
     serve_style = require('./serve_style'),
     serve_data = require('./serve_data'),
-    utils = require('./utils');
+    utils = require('./utils'),
+    avgresp = require('./avgresp');
 
 var isLight = packageJson.name.slice(-6) == '-light';
 if (!isLight) {
@@ -47,6 +48,8 @@ function start(opts) {
   } else if (process.env.NODE_ENV !== 'test') {
     app.use(morgan('dev'));
   }
+
+  app.use(avgresp.avgresp());
 
   var config = opts.config || null;
   var configPath = null;
@@ -389,7 +392,7 @@ function start(opts) {
   });
   app.get('/health', function(req, res, next) {
     if (startupComplete) {
-      return res.status(200).send('OK');
+      return res.status(200).send('OK, ' + avgresp.getAverageResp());
     } else {
       return res.status(503).send('Starting');
     }
