@@ -22,9 +22,12 @@ var packageJson = require('../package'),
     serve_style = require('./serve_style'),
     serve_data = require('./serve_data'),
     utils = require('./utils'),
-    avgresp = require('./avgresp');
+    avgresp = require('./avgresp'),
+    prometheus = require('prom-client');
 
 var sprintf = require("sprintf-js").sprintf;
+
+prometheus.collectDefaultMetrics({ timeout: 5000 });
 
 var isLight = packageJson.name.slice(-6) == '-light';
 if (!isLight) {
@@ -397,7 +400,7 @@ function start(opts) {
 
     var healthTemplate = {
     "service": "tileserver",
-    "status": "green",
+    "status": "200",
     "message": "OK"
     };
 
@@ -406,16 +409,16 @@ function start(opts) {
     if (startupComplete) {
         statusCode = 200;
         healthTemplate.message = "OK";
-        healthTemplate.status = "green";
-        healthTemplate.response_last_50_reqs = sprintf("%.2fms", avgresp.getAverageResp());
     } else {
         statusCode = 503;
         healthTemplate.message = "Starting";
-        healthTemplate.status = "green";
-        healthTemplate.response_last_50_reqs = "0ms";
     }
-
+    healthTemplate.status = statusCode;
     return res.status(statusCode).send(healthTemplate);
+  });
+
+  app.get('/metrics', function(req, res, next){
+     res.end(prometheus.register.metrics());
   });
 
   var server = app.listen(process.env.PORT || opts.port, process.env.BIND || opts.bind, function() {

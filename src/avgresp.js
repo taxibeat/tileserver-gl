@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 'use strict';
 
+var prometheus = require('prom-client');
+
 module.exports = {
-    avgresp: avgresp,
-    getAverageResp: getAverageResp
+    avgresp: avgresp
 };
 
 
@@ -24,46 +25,18 @@ function avgresp(options) {
     samples = new Array(history);
     var currentIndex = 0;
 
-    function updateAverage(time) {
-        if (currentIndex == history - 1) {
-            currentIndex = 0;
-            fullhistory = true;
-        }
-
-        samples[currentIndex] = time;
-        currentIndex++;
-    }
+    const respSummary = new prometheus.Summary({
+        name: "tileserver_static_latency",
+        help: "The tileserver response time in seconds"
+    });
 
     return function avgresp(req, res, next) {
-        var startTime = process.hrtime();
+        var end = respSummary.startTimer();
 
         res.on('finish', function() {
-            var diff = process.hrtime(startTime);
-            var time = diff[0] * 1e3 + diff[1] * 1e-6
-
-            updateAverage(time);
+            end();
         })
 
         next();
     }
-}
-
-function getAverageResp() {
-    var sum = 0;
-    if (samples.length > 0) {
-        sum = samples.reduce(function(total, val) {
-            return total + val;
-        },0);
-    }
-
-    var historySize = history;
-
-    if (!fullhistory) {
-        historySize = samples.reduce(function(total, val) {
-            return total?++total:1;
-        },0)
-    }
-    if (historySize == 0) return 0;
-
-    return sum / historySize;
 }
