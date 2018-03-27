@@ -41,7 +41,8 @@
     "proj4": "2.4.4",
     "request": "2.83.0",
     "sharp": "^0.20.0",
-    "tileserver-gl-styles": "1.2.0"
+    "tileserver-gl-styles": "1.2.0",
+    "prom-client": "11.0.0"
   },
   "devDependencies": {
     "should": "^11.2.0",
