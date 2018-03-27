@@ -26,7 +26,7 @@ function avgresp(options) {
     var currentIndex = 0;
 
     const respSummary = new prometheus.Summary({
-        name: "tileserver_static_latency",
+        name: "tileserver_static_latency_seconds",
         help: "The tileserver response time in seconds"
     });
 
