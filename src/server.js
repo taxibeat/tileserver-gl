@@ -24,6 +24,8 @@ var packageJson = require('../package'),
     utils = require('./utils'),
     avgresp = require('./avgresp');
 
+var sprintf = require("sprintf-js").sprintf;
+
 var isLight = packageJson.name.slice(-6) == '-light';
 if (!isLight) {
   // do not require `serve_rendered` in the light package
@@ -49,7 +51,7 @@ function start(opts) {
     app.use(morgan('dev'));
   }
 
-  app.use(avgresp.avgresp());
+  app.use(/\/styles\/.*\/static\/.*$/, avgresp.avgresp());
 
   var config = opts.config || null;
   var configPath = null;
@@ -390,12 +392,30 @@ function start(opts) {
     console.log('Startup complete');
     startupComplete = true;
   });
+
   app.get('/health', function(req, res, next) {
+
+    var healthTemplate = {
+    "service": "tileserver",
+    "status": "green",
+    "message": "OK"
+    };
+
+    var statusCode = 200;
+
     if (startupComplete) {
-      return res.status(200).send('OK, ' + avgresp.getAverageResp());
+        statusCode = 200;
+        healthTemplate.message = "OK";
+        healthTemplate.status = "green";
+        healthTemplate.response_last_50_reqs = sprintf("%.2fms", avgresp.getAverageResp());
     } else {
-      return res.status(503).send('Starting');
+        statusCode = 503;
+        healthTemplate.message = "Starting";
+        healthTemplate.status = "green";
+        healthTemplate.response_last_50_reqs = "0ms";
     }
+
+    return res.status(statusCode).send(healthTemplate);
   });
 
   var server = app.listen(process.env.PORT || opts.port, process.env.BIND || opts.bind, function() {
