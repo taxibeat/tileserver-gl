@@ -34,15 +34,16 @@
     "glyph-pbf-composite": "0.0.2",
     "handlebars": "4.0.11",
     "http-shutdown": "^1.2.0",
+    "jaeger-client": "^3.10.0",
     "morgan": "1.9.0",
     "nomnom": "1.8.1",
     "npm": "^5.7.1",
     "pbf": "3.0.5",
     "proj4": "2.4.4",
+    "prom-client": "11.0.0",
     "request": "2.83.0",
     "sharp": "^0.20.0",
-    "tileserver-gl-styles": "1.2.0",
-    "prom-client": "11.0.0"
+    "tileserver-gl-styles": "1.2.0"
   },
   "devDependencies": {
     "should": "^11.2.0",
