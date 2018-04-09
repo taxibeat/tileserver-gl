@@ -20,13 +20,19 @@ var Canvas = require('canvas'),
   mbtiles = require('@mapbox/mbtiles'),
   proj4 = require('proj4'),
   request = require('request'),
+  opentracing = require('opentracing'),
   initTracer = require('jaeger-client').initTracer;
 
 
 // Tracer configuration.
 
 var tracerConfig = {
+  sampler: { type: 'const', param: 1 },
   serviceName: 'tileserver',
+  reporter: {
+    // TODO: this should be read dynamically from conf.
+    agentHost: 'jaeger-agent'
+  }
 };
 
 var tracerOptions = {
@@ -415,11 +421,11 @@ module.exports = function (options, repo, params, id, dataResolver) {
 
   var respondImage = function (z, lon, lat, bearing, pitch,
     width, height, scale, format, res, next,
-    opt_overlay) {
+    opt_overlay, span) {
     if (Math.abs(lon) > 180 || Math.abs(lat) > 85.06 ||
       lon != lon || lat != lat) {
       span.setTag(opentracing.Tags.ERROR, true);
-      span.log({'event': '400', 'message': 'Invalid center'});
+      span.log({ 'event': '400', 'message': 'Invalid center' });
       span.finish();
       return res.status(400).send('Invalid center');
     }
@@ -427,7 +433,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
       Math.max(width, height) * scale > (options.maxSize || 2048) ||
       width != width || height != height) {
       span.setTag(opentracing.Tags.ERROR, true);
-      span.log({'event': '400', 'message': 'Invalid size'});
+      span.log({ 'event': '400', 'message': 'Invalid size' });
       span.finish();
       return res.status(400).send('Invalid size');
     }
@@ -436,7 +442,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
       format = 'jpeg';
     } else {
       span.setTag(opentracing.Tags.ERROR, true);
-      span.log({'event': '400', 'message': 'Invalid format'});
+      span.log({ 'event': '400', 'message': 'Invalid format' });
       span.finish();
       return res.status(400).send('Invalid format');
     }
@@ -513,7 +519,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
             'Content-Type': 'image/' + format
           });
 
-          span.log({'event': 'request_end'});
+          span.log({ 'event': 'request_end' });
           span.finish();
           return res.status(200).send(buffer);
         });
@@ -528,6 +534,12 @@ module.exports = function (options, repo, params, id, dataResolver) {
         return res.sendStatus(304);
       }
     }
+
+    // Extract the parent span from the request.
+    const parentSpan = tracer.extract(tracer.FORMAT_HTTP_HEADERS, req.headers);
+
+    // create the new span.
+    const span = tracer.startSpan('static_tile', { childOf: parentSpan });
 
     var z = req.params.z | 0,
       x = req.params.x | 0,
@@ -544,7 +556,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
       ((y + 0.5) / (1 << z)) * (256 << z)
     ], z);
     return respondImage(z, tileCenter[0], tileCenter[1], 0, 0,
-      tileSize, tileSize, scale, format, res, next);
+      tileSize, tileSize, scale, format, res, next, span);
   });
 
   var extractPathFromQuery = function (query, transformer) {
@@ -672,12 +684,14 @@ module.exports = function (options, repo, params, id, dataResolver) {
 
       // instrumentation
       //
+      // TODO: refactor this — should be extracted and done in one place.
+      // Not currently very DRY.
 
       // Extract the parent span from the request.
       const parentSpan = tracer.extract(tracer.FORMAT_HTTP_HEADERS, req.headers);
 
       // create the new span.
-      const span = tracer.startSpan('static_image',{childOf: parentSpan});
+      const span = tracer.startSpan('static_image', { childOf: parentSpan });
 
       var raw = req.params.raw;
       var z = +req.params.z,
@@ -693,7 +707,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
       if (z < 0) {
         span.setTag(opentracing.Tags.ERROR, true);
         //TODO: refactor this so that error responses and instrumentation are streamlined.
-        span.log({'event': '400', 'message': 'Invalid zoom'});
+        span.log({ 'event': '400', 'message': 'Invalid zoom' });
         span.finish();
         return res.status(400).send('Invalid zoom');
       }
@@ -712,7 +726,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
         path, req.query);
 
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
-        res, next, overlay);
+        res, next, overlay, span);
     });
 
     var serveBounds = function (req, res, next) {
@@ -723,6 +737,13 @@ module.exports = function (options, repo, params, id, dataResolver) {
 
       var transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
+
+      // Extract the parent span from the request.
+      const parentSpan = tracer.extract(tracer.FORMAT_HTTP_HEADERS, req.headers);
+
+      // create the new span.
+      const span = tracer.startSpan('static_bounds', { childOf: parentSpan });
+
 
       if (transformer) {
         var minCorner = transformer(bbox.slice(0, 2));
@@ -749,7 +770,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
       var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
         path, req.query);
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
-        res, next, overlay);
+        res, next, overlay, span);
     };
 
     var boundsPattern =
@@ -791,6 +812,12 @@ module.exports = function (options, repo, params, id, dataResolver) {
         scale = getScale(req.params.scale),
         format = req.params.format;
 
+      // Extract the parent span from the request.
+      const parentSpan = tracer.extract(opentracing.FORMAT_HTTP_HEADERS, req.headers);
+
+      // create the new span.
+      const span = tracer.startSpan('static_image', { childOf: parentSpan });
+
       var transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
 
@@ -820,7 +847,7 @@ module.exports = function (options, repo, params, id, dataResolver) {
         path, req.query);
 
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
-        res, next, overlay);
+        res, next, overlay, span);
     });
   }
 
