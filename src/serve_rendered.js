@@ -1,25 +1,48 @@
 'use strict';
 
 var advancedPool = require('advanced-pool'),
-    fs = require('fs'),
-    path = require('path'),
-    url = require('url'),
-    util = require('util'),
-    zlib = require('zlib');
+  fs = require('fs'),
+  path = require('path'),
+  url = require('url'),
+  util = require('util'),
+  zlib = require('zlib');
 
 // sharp has to be required before node-canvas
 // see https://github.com/lovell/sharp/issues/371
 var sharp = require('sharp');
 
 var Canvas = require('canvas'),
-    clone = require('clone'),
-    Color = require('color'),
-    express = require('express'),
-    mercator = new (require('@mapbox/sphericalmercator'))(),
-    mbgl = require('@mapbox/mapbox-gl-native'),
-    mbtiles = require('@mapbox/mbtiles'),
-    proj4 = require('proj4'),
-    request = require('request');
+  clone = require('clone'),
+  Color = require('color'),
+  express = require('express'),
+  mercator = new (require('@mapbox/sphericalmercator'))(),
+  mbgl = require('@mapbox/mapbox-gl-native'),
+  mbtiles = require('@mapbox/mbtiles'),
+  proj4 = require('proj4'),
+  request = require('request'),
+  opentracing = require('opentracing'),
+  initTracer = require('jaeger-client').initTracer;
+
+
+// Tracer configuration.
+
+var tracerConfig = {
+  sampler: { type: 'const', param: 1 },
+  serviceName: 'tileserver',
+  reporter: {
+    // TODO: this should be read dynamically from conf.
+    agentHost: 'jaeger-agent'
+  }
+};
+
+var tracerOptions = {
+  tags: {
+    'tileserver.version': '1.0',
+  }
+};
+var tracer = initTracer(tracerConfig, tracerOptions);
+
+// End tracer configuration.
 
 var utils = require('./utils');
 
@@ -27,11 +50,11 @@ var markerSize = 20;
 
 var FLOAT_PATTERN = '[+-]?(?:\\d+|\\d+\.?\\d+)';
 
-var getScale = function(scale) {
+var getScale = function (scale) {
   return (scale || '@1x').slice(1, 2) | 0;
 };
 
-mbgl.on('message', function(e) {
+mbgl.on('message', function (e) {
   if (e.severity == 'WARNING' || e.severity == 'ERROR') {
     console.log('mbgl:', e);
   }
@@ -63,7 +86,7 @@ var cachedEmptyResponses = {
  */
 function createEmptyResponse(format, color, callback) {
   if (!format || format === 'pbf') {
-    callback(null, {data: cachedEmptyResponses['']});
+    callback(null, { data: cachedEmptyResponses[''] });
     return;
   }
 
@@ -77,7 +100,7 @@ function createEmptyResponse(format, color, callback) {
   var cacheKey = format + ',' + color;
   var data = cachedEmptyResponses[cacheKey];
   if (data) {
-    callback(null, {data: data});
+    callback(null, { data: data });
     return;
   }
 
@@ -91,15 +114,15 @@ function createEmptyResponse(format, color, callback) {
       height: 1,
       channels: channels
     }
-  }).toFormat(format).toBuffer(function(err, buffer, info) {
+  }).toFormat(format).toBuffer(function (err, buffer, info) {
     if (!err) {
       cachedEmptyResponses[cacheKey] = buffer;
     }
-    callback(null, {data: buffer});
+    callback(null, { data: buffer });
   });
 }
 
-module.exports = function(options, repo, params, id, dataResolver) {
+module.exports = function (options, repo, params, id, dataResolver) {
   var app = express().disable('x-powered-by');
 
   var maxScaleFactor = Math.min(Math.floor(options.maxScaleFactor || 3), 9);
@@ -122,14 +145,14 @@ module.exports = function(options, repo, params, id, dataResolver) {
   };
 
   var existingFonts = {};
-  var fontListingPromise = new Promise(function(resolve, reject) {
-    fs.readdir(options.paths.fonts, function(err, files) {
+  var fontListingPromise = new Promise(function (resolve, reject) {
+    fs.readdir(options.paths.fonts, function (err, files) {
       if (err) {
         reject(err);
         return;
       }
-      files.forEach(function(file) {
-        fs.stat(path.join(options.paths.fonts, file), function(err, stats) {
+      files.forEach(function (file) {
+        fs.stat(path.join(options.paths.fonts, file), function (err, stats) {
           if (err) {
             reject(err);
             return;
@@ -144,17 +167,17 @@ module.exports = function(options, repo, params, id, dataResolver) {
   });
 
   var styleJSON;
-  var createPool = function(ratio, min, max) {
-    var createRenderer = function(ratio, createCallback) {
+  var createPool = function (ratio, min, max) {
+    var createRenderer = function (ratio, createCallback) {
       var renderer = new mbgl.Map({
         ratio: ratio,
-        request: function(req, callback) {
+        request: function (req, callback) {
           var protocol = req.url.split(':')[0];
           //console.log('Handling request:', req);
           if (protocol == 'sprites') {
             var dir = options.paths[protocol];
             var file = unescape(req.url).substring(protocol.length + 3);
-            fs.readFile(path.join(dir, file), function(err, data) {
+            fs.readFile(path.join(dir, file), function (err, data) {
               callback(err, { data: data });
             });
           } else if (protocol == 'fonts') {
@@ -163,10 +186,10 @@ module.exports = function(options, repo, params, id, dataResolver) {
             var range = parts[3].split('.')[0];
             utils.getFontsPbf(
               null, options.paths[protocol], fontstack, range, existingFonts
-            ).then(function(concated) {
-              callback(null, {data: concated});
-            }, function(err) {
-              callback(err, {data: null});
+            ).then(function (concated) {
+              callback(null, { data: concated });
+            }, function (err) {
+              callback(err, { data: null });
             });
           } else if (protocol == 'mbtiles') {
             var parts = req.url.split('/');
@@ -174,10 +197,10 @@ module.exports = function(options, repo, params, id, dataResolver) {
             var source = map.sources[sourceId];
             var sourceInfo = styleJSON.sources[sourceId];
             var z = parts[3] | 0,
-                x = parts[4] | 0,
-                y = parts[5].split('.')[0] | 0,
-                format = parts[5].split('.')[1];
-            source.getTile(z, x, y, function(err, data, headers) {
+              x = parts[4] | 0,
+              y = parts[5].split('.')[0] | 0,
+              format = parts[5].split('.')[1];
+            source.getTile(z, x, y, function (err, data, headers) {
               if (err) {
                 //console.log('MBTiles error, serving empty', err);
                 createEmptyResponse(sourceInfo.format, sourceInfo.color, callback);
@@ -208,32 +231,32 @@ module.exports = function(options, repo, params, id, dataResolver) {
             });
           } else if (protocol == 'http' || protocol == 'https') {
             request({
-                url: req.url,
-                encoding: null,
-                gzip: true
-            }, function(err, res, body) {
-                var parts = url.parse(req.url);
-                var extension = path.extname(parts.pathname).toLowerCase();
-                var format = extensionToFormat[extension] || '';
-                if (err || res.statusCode < 200 || res.statusCode >= 300) {
-                  // console.log('HTTP error', err || res.statusCode);
-                  createEmptyResponse(format, '', callback);
-                  return;
-                }
+              url: req.url,
+              encoding: null,
+              gzip: true
+            }, function (err, res, body) {
+              var parts = url.parse(req.url);
+              var extension = path.extname(parts.pathname).toLowerCase();
+              var format = extensionToFormat[extension] || '';
+              if (err || res.statusCode < 200 || res.statusCode >= 300) {
+                // console.log('HTTP error', err || res.statusCode);
+                createEmptyResponse(format, '', callback);
+                return;
+              }
 
-                var response = {};
-                if (res.headers.modified) {
-                  response.modified = new Date(res.headers.modified);
-                }
-                if (res.headers.expires) {
-                  response.expires = new Date(res.headers.expires);
-                }
-                if (res.headers.etag) {
-                  response.etag = res.headers.etag;
-                }
+              var response = {};
+              if (res.headers.modified) {
+                response.modified = new Date(res.headers.modified);
+              }
+              if (res.headers.expires) {
+                response.expires = new Date(res.headers.expires);
+              }
+              if (res.headers.etag) {
+                response.etag = res.headers.etag;
+              }
 
-                response.data = body;
-                callback(null, response);
+              response.data = body;
+              callback(null, response);
             });
           }
         }
@@ -245,7 +268,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
       min: min,
       max: max,
       create: createRenderer.bind(null, ratio),
-      destroy: function(renderer) {
+      destroy: function (renderer) {
         renderer.release();
       }
     });
@@ -257,33 +280,33 @@ module.exports = function(options, repo, params, id, dataResolver) {
   var httpTester = /^(http(s)?:)?\/\//;
   if (styleJSON.sprite && !httpTester.test(styleJSON.sprite)) {
     styleJSON.sprite = 'sprites://' +
-        styleJSON.sprite
-            .replace('{style}', path.basename(styleFile, '.json'))
-            .replace('{styleJsonFolder}', path.relative(options.paths.sprites, path.dirname(styleJSONPath)));
+      styleJSON.sprite
+        .replace('{style}', path.basename(styleFile, '.json'))
+        .replace('{styleJsonFolder}', path.relative(options.paths.sprites, path.dirname(styleJSONPath)));
   }
   if (styleJSON.glyphs && !httpTester.test(styleJSON.glyphs)) {
     styleJSON.glyphs = 'fonts://' + styleJSON.glyphs;
   }
 
   var markerImages = [];
-  var markerImageNames = ['pickup','dropoff'];
+  var markerImageNames = ['pickup', 'dropoff'];
 
 
-  var markerLoadPromise = new Promise(function(resolveCallback, rejectCallback) {
+  var markerLoadPromise = new Promise(function (resolveCallback, rejectCallback) {
 
-      markerImageNames.forEach(function(imageName){
-          fs.readFile(path.join(__dirname, "../public/resources/images/") + imageName + '-marker.png', function(err, fileData) {
+    markerImageNames.forEach(function (imageName) {
+      fs.readFile(path.join(__dirname, "../public/resources/images/") + imageName + '-marker.png', function (err, fileData) {
 
-              if (err) {
-                 rejectCallback(err);
-              }
+        if (err) {
+          rejectCallback(err);
+        }
 
-              var mkrImage = new Canvas.Image();
-              mkrImage.src = fileData;
-              markerImages.push(mkrImage);
-          });
+        var mkrImage = new Canvas.Image();
+        mkrImage.src = fileData;
+        markerImages.push(mkrImage);
       });
-      resolveCallback();
+    });
+    resolveCallback();
   });
 
   var tileJSON = {
@@ -304,7 +327,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
   var dataProjWGStoInternalWGS = null;
 
   var queue = [];
-  Object.keys(styleJSON.sources).forEach(function(name) {
+  Object.keys(styleJSON.sources).forEach(function (name) {
     var source = styleJSON.sources[name];
     var url = source.url;
 
@@ -314,7 +337,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
       var mbtilesFile = url.substring('mbtiles://'.length);
       var fromData = mbtilesFile[0] == '{' &&
-                     mbtilesFile[mbtilesFile.length - 1] == '}';
+        mbtilesFile[mbtilesFile.length - 1] == '}';
 
       if (fromData) {
         mbtilesFile = mbtilesFile.substr(1, mbtilesFile.length - 2);
@@ -329,14 +352,14 @@ module.exports = function(options, repo, params, id, dataResolver) {
         }
       }
 
-      queue.push(new Promise(function(resolve, reject) {
+      queue.push(new Promise(function (resolve, reject) {
         mbtilesFile = path.resolve(options.paths.mbtiles, mbtilesFile);
         var mbtilesFileStats = fs.statSync(mbtilesFile);
         if (!mbtilesFileStats.isFile() || mbtilesFileStats.size == 0) {
           throw Error('Not valid MBTiles file: ' + mbtilesFile);
         }
-        map.sources[name] = new mbtiles(mbtilesFile, function(err) {
-          map.sources[name].getInfo(function(err, info) {
+        map.sources[name] = new mbtiles(mbtilesFile, function (err) {
+          map.sources[name].getInfo(function (err, info) {
             if (err) {
               console.error(err);
               return;
@@ -346,7 +369,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
               // how to do this for multiple sources with different proj4 defs?
               var to3857 = proj4('EPSG:3857');
               var toDataProj = proj4(info.proj4);
-              dataProjWGStoInternalWGS = function(xy) {
+              dataProjWGStoInternalWGS = function (xy) {
                 return to3857.inverse(toDataProj.forward(xy));
               };
             }
@@ -365,7 +388,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
             }
 
             if (!attributionOverride &&
-                source.attribution && source.attribution.length > 0) {
+              source.attribution && source.attribution.length > 0) {
               if (tileJSON.attribution.length > 0) {
                 tileJSON.attribution += '; ';
               }
@@ -378,7 +401,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
     }
   });
 
-  var renderersReadyPromise = Promise.all(queue).then(function() {
+  var renderersReadyPromise = Promise.all(queue).then(function () {
     // standard and @2x tiles are much more usual -> default to larger pools
     var minPoolSizes = options.minRendererPoolSizes || [8, 4, 2];
     var maxPoolSizes = options.maxRendererPoolSizes || [16, 8, 4];
@@ -394,29 +417,38 @@ module.exports = function(options, repo, params, id, dataResolver) {
   repo[id] = tileJSON;
 
   var tilePattern = '/' + id + '/:z(\\d+)/:x(\\d+)/:y(\\d+)' +
-                    ':scale(' + scalePattern + ')?\.:format([\\w]+)';
+    ':scale(' + scalePattern + ')?\.:format([\\w]+)';
 
-  var respondImage = function(z, lon, lat, bearing, pitch,
-                              width, height, scale, format, res, next,
-                              opt_overlay) {
+  var respondImage = function (z, lon, lat, bearing, pitch,
+    width, height, scale, format, res, next,
+    opt_overlay, span) {
     if (Math.abs(lon) > 180 || Math.abs(lat) > 85.06 ||
-        lon != lon || lat != lat) {
+      lon != lon || lat != lat) {
+      span.setTag(opentracing.Tags.ERROR, true);
+      span.log({ 'event': '400', 'message': 'Invalid center' });
+      span.finish();
       return res.status(400).send('Invalid center');
     }
     if (Math.min(width, height) <= 0 ||
-        Math.max(width, height) * scale > (options.maxSize || 2048) ||
-        width != width || height != height) {
+      Math.max(width, height) * scale > (options.maxSize || 2048) ||
+      width != width || height != height) {
+      span.setTag(opentracing.Tags.ERROR, true);
+      span.log({ 'event': '400', 'message': 'Invalid size' });
+      span.finish();
       return res.status(400).send('Invalid size');
     }
     if (format == 'png' || format == 'webp') {
     } else if (format == 'jpg' || format == 'jpeg') {
       format = 'jpeg';
     } else {
+      span.setTag(opentracing.Tags.ERROR, true);
+      span.log({ 'event': '400', 'message': 'Invalid format' });
+      span.finish();
       return res.status(400).send('Invalid format');
     }
 
     var pool = map.renderers[scale];
-    pool.acquire(function(err, renderer) {
+    pool.acquire(function (err, renderer) {
       var mbglZ = Math.max(0, z - 1);
       var params = {
         zoom: mbglZ,
@@ -430,7 +462,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
         params.width *= 2;
         params.height *= 2;
       }
-      renderer.render(params, function(err, data) {
+      renderer.render(params, function (err, data) {
         pool.release(renderer);
         if (err) {
           console.error(err);
@@ -468,16 +500,16 @@ module.exports = function(options, repo, params, id, dataResolver) {
         }
 
         var formatQuality = (params.formatQuality || {})[format] ||
-                            (options.formatQuality || {})[format];
+          (options.formatQuality || {})[format];
 
         if (format == 'png') {
-          image.png({adaptiveFiltering: false});
+          image.png({ adaptiveFiltering: false });
         } else if (format == 'jpeg') {
-          image.jpeg({quality: formatQuality || 80});
+          image.jpeg({ quality: formatQuality || 80 });
         } else if (format == 'webp') {
-          image.webp({quality: formatQuality || 90});
+          image.webp({ quality: formatQuality || 90 });
         }
-        image.toBuffer(function(err, buffer, info) {
+        image.toBuffer(function (err, buffer, info) {
           if (!buffer) {
             return res.status(404).send('Not found');
           }
@@ -486,13 +518,16 @@ module.exports = function(options, repo, params, id, dataResolver) {
             'Last-Modified': lastModified,
             'Content-Type': 'image/' + format
           });
+
+          span.log({ 'event': 'request_end' });
+          span.finish();
           return res.status(200).send(buffer);
         });
       });
     });
   };
 
-  app.get(tilePattern, function(req, res, next) {
+  app.get(tilePattern, function (req, res, next) {
     var modifiedSince = req.get('if-modified-since'), cc = req.get('cache-control');
     if (modifiedSince && (!cc || cc.indexOf('no-cache') == -1)) {
       if (new Date(lastModified) <= new Date(modifiedSince)) {
@@ -500,13 +535,19 @@ module.exports = function(options, repo, params, id, dataResolver) {
       }
     }
 
+    // Extract the parent span from the request.
+    const parentSpan = tracer.extract(tracer.FORMAT_HTTP_HEADERS, req.headers);
+
+    // create the new span.
+    const span = tracer.startSpan('static_tile', { childOf: parentSpan });
+
     var z = req.params.z | 0,
-        x = req.params.x | 0,
-        y = req.params.y | 0,
-        scale = getScale(req.params.scale),
-        format = req.params.format;
+      x = req.params.x | 0,
+      y = req.params.y | 0,
+      scale = getScale(req.params.scale),
+      format = req.params.format;
     if (z < 0 || x < 0 || y < 0 ||
-        z > 20 || x >= Math.pow(2, z) || y >= Math.pow(2, z)) {
+      z > 20 || x >= Math.pow(2, z) || y >= Math.pow(2, z)) {
       return res.status(404).send('Out of bounds');
     }
     var tileSize = 256;
@@ -515,13 +556,13 @@ module.exports = function(options, repo, params, id, dataResolver) {
       ((y + 0.5) / (1 << z)) * (256 << z)
     ], z);
     return respondImage(z, tileCenter[0], tileCenter[1], 0, 0,
-                        tileSize, tileSize, scale, format, res, next);
+      tileSize, tileSize, scale, format, res, next, span);
   });
 
-  var extractPathFromQuery = function(query, transformer) {
+  var extractPathFromQuery = function (query, transformer) {
     var pathParts = (query.path || '').split('|');
     var path = [];
-    pathParts.forEach(function(pair) {
+    pathParts.forEach(function (pair) {
       var pairParts = pair.split(',');
       if (pairParts.length == 2) {
         var pair;
@@ -539,12 +580,12 @@ module.exports = function(options, repo, params, id, dataResolver) {
     return path;
   };
 
-  var renderOverlay = function(z, x, y, bearing, pitch, w, h, scale,
-                               path, query) {
+  var renderOverlay = function (z, x, y, bearing, pitch, w, h, scale,
+    path, query) {
     if (!path || path.length < 2) {
       return null;
     }
-    var precisePx = function(ll, zoom) {
+    var precisePx = function (ll, zoom) {
       var px = mercator.px(ll, 20);
       var scale = Math.pow(2, zoom - 20);
       return [px[0] * scale, px[1] * scale];
@@ -573,17 +614,17 @@ module.exports = function(options, repo, params, id, dataResolver) {
       ctx.translate(-center[0] + w / 2, -center[1] + h / 2);
     }
     var lineWidth = query.width !== undefined ?
-                    parseFloat(query.width) : 1;
+      parseFloat(query.width) : 1;
     ctx.lineWidth = lineWidth;
     ctx.strokeStyle = query.stroke || 'rgba(0,64,255,0.7)';
     ctx.fillStyle = query.fill || 'rgba(255,255,255,0.4)';
     ctx.beginPath();
-    path.forEach(function(pair) {
+    path.forEach(function (pair) {
       var px = precisePx(pair, z);
       ctx.lineTo(px[0], px[1]);
     });
     if (path[0][0] == path[path.length - 1][0] &&
-        path[0][1] == path[path.length - 1][1]) {
+      path[0][1] == path[path.length - 1][1]) {
       ctx.closePath();
     }
     ctx.fill();
@@ -592,30 +633,30 @@ module.exports = function(options, repo, params, id, dataResolver) {
     }
 
     if (query.showMarkers && query.showMarkers == 1) {
-        // Add the markers, if requested to do so.
+      // Add the markers, if requested to do so.
 
-        var markers = [
-                        [markerImages[0], precisePx(path[0],z).map(function(loc,idx){ return (idx ==1)? loc - markerSize/2: loc - markerSize/2;})],
-                        [markerImages[1], precisePx(path[path.length-1],z).map(function(loc,idx){ return (idx == 1)?loc - markerSize/2: loc - markerSize/2;})]
-                    ];
+      var markers = [
+        [markerImages[0], precisePx(path[0], z).map(function (loc, idx) { return (idx == 1) ? loc - markerSize / 2 : loc - markerSize / 2; })],
+        [markerImages[1], precisePx(path[path.length - 1], z).map(function (loc, idx) { return (idx == 1) ? loc - markerSize / 2 : loc - markerSize / 2; })]
+      ];
 
-        markers.forEach(function(imgSpec){
-            var coordinates = imgSpec[1];
-            ctx.drawImage(imgSpec[0], coordinates[0], coordinates[1], markerSize, markerSize);
-        });
+      markers.forEach(function (imgSpec) {
+        var coordinates = imgSpec[1];
+        ctx.drawImage(imgSpec[0], coordinates[0], coordinates[1], markerSize, markerSize);
+      });
     }
 
     return canvas.toBuffer();
   };
 
-  var calcZForBBox = function(bbox, w, h, query) {
+  var calcZForBBox = function (bbox, w, h, query) {
     var z = 25;
 
     var padding = query.padding !== undefined ?
-                  parseFloat(query.padding) : 0.1;
+      parseFloat(query.padding) : 0.1;
 
     var minCorner = mercator.px([bbox[0], bbox[3]], z),
-        maxCorner = mercator.px([bbox[2], bbox[1]], z);
+      maxCorner = mercator.px([bbox[2], bbox[1]], z);
     var w_ = w / (1 + 2 * padding);
     var h_ = h / (1 + 2 * padding);
 
@@ -631,27 +672,43 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
   if (options.serveStaticMaps !== false) {
     var staticPattern =
-        '/' + id + '/static/:raw(raw)?/%s/:width(\\d+)x:height(\\d+)' +
-        ':scale(' + scalePattern + ')?\.:format([\\w]+)';
+      '/' + id + '/static/:raw(raw)?/%s/:width(\\d+)x:height(\\d+)' +
+      ':scale(' + scalePattern + ')?\.:format([\\w]+)';
 
     var centerPattern =
-        util.format(':x(%s),:y(%s),:z(%s)(@:bearing(%s)(,:pitch(%s))?)?',
-                    FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN,
-                    FLOAT_PATTERN, FLOAT_PATTERN);
+      util.format(':x(%s),:y(%s),:z(%s)(@:bearing(%s)(,:pitch(%s))?)?',
+        FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN,
+        FLOAT_PATTERN, FLOAT_PATTERN);
 
-    app.get(util.format(staticPattern, centerPattern), function(req, res, next) {
+    app.get(util.format(staticPattern, centerPattern), function (req, res, next) {
+
+      // instrumentation
+      //
+      // TODO: refactor this — should be extracted and done in one place.
+      // Not currently very DRY.
+
+      // Extract the parent span from the request.
+      const parentSpan = tracer.extract(tracer.FORMAT_HTTP_HEADERS, req.headers);
+
+      // create the new span.
+      const span = tracer.startSpan('static_image', { childOf: parentSpan });
+
       var raw = req.params.raw;
       var z = +req.params.z,
-          x = +req.params.x,
-          y = +req.params.y,
-          bearing = +(req.params.bearing || '0'),
-          pitch = +(req.params.pitch || '0'),
-          w = req.params.width | 0,
-          h = req.params.height | 0,
-          scale = getScale(req.params.scale),
-          format = req.params.format;
+        x = +req.params.x,
+        y = +req.params.y,
+        bearing = +(req.params.bearing || '0'),
+        pitch = +(req.params.pitch || '0'),
+        w = req.params.width | 0,
+        h = req.params.height | 0,
+        scale = getScale(req.params.scale),
+        format = req.params.format;
 
       if (z < 0) {
+        span.setTag(opentracing.Tags.ERROR, true);
+        //TODO: refactor this so that error responses and instrumentation are streamlined.
+        span.log({ 'event': '400', 'message': 'Invalid zoom' });
+        span.finish();
         return res.status(400).send('Invalid zoom');
       }
 
@@ -666,20 +723,27 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
       var path = extractPathFromQuery(req.query, transformer);
       var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
-                                  path, req.query);
+        path, req.query);
 
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
-                          res, next, overlay);
+        res, next, overlay, span);
     });
 
-    var serveBounds = function(req, res, next) {
+    var serveBounds = function (req, res, next) {
       var raw = req.params.raw;
       var bbox = [+req.params.minx, +req.params.miny,
-                  +req.params.maxx, +req.params.maxy];
+      +req.params.maxx, +req.params.maxy];
       var center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 
       var transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
+
+      // Extract the parent span from the request.
+      const parentSpan = tracer.extract(tracer.FORMAT_HTTP_HEADERS, req.headers);
+
+      // create the new span.
+      const span = tracer.startSpan('static_bounds', { childOf: parentSpan });
+
 
       if (transformer) {
         var minCorner = transformer(bbox.slice(0, 2));
@@ -692,30 +756,30 @@ module.exports = function(options, repo, params, id, dataResolver) {
       }
 
       var w = req.params.width | 0,
-          h = req.params.height | 0,
-          scale = getScale(req.params.scale),
-          format = req.params.format;
+        h = req.params.height | 0,
+        scale = getScale(req.params.scale),
+        format = req.params.format;
 
       var z = calcZForBBox(bbox, w, h, req.query),
-          x = center[0],
-          y = center[1],
-          bearing = 0,
-          pitch = 0;
+        x = center[0],
+        y = center[1],
+        bearing = 0,
+        pitch = 0;
 
       var path = extractPathFromQuery(req.query, transformer);
       var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
-                                  path, req.query);
+        path, req.query);
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
-                          res, next, overlay);
+        res, next, overlay, span);
     };
 
     var boundsPattern =
-        util.format(':minx(%s),:miny(%s),:maxx(%s),:maxy(%s)',
-                    FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN);
+      util.format(':minx(%s),:miny(%s),:maxx(%s),:maxy(%s)',
+        FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN);
 
     app.get(util.format(staticPattern, boundsPattern), serveBounds);
 
-    app.get('/' + id + '/static/', function(req, res, next) {
+    app.get('/' + id + '/static/', function (req, res, next) {
       for (var key in req.query) {
         req.query[key.toLowerCase()] = req.query[key];
       }
@@ -739,14 +803,20 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
     var autoPattern = 'auto';
 
-    app.get(util.format(staticPattern, autoPattern), function(req, res, next) {
+    app.get(util.format(staticPattern, autoPattern), function (req, res, next) {
       var raw = req.params.raw;
       var w = req.params.width | 0,
-          h = req.params.height | 0,
-          bearing = 0,
-          pitch = 0,
-          scale = getScale(req.params.scale),
-          format = req.params.format;
+        h = req.params.height | 0,
+        bearing = 0,
+        pitch = 0,
+        scale = getScale(req.params.scale),
+        format = req.params.format;
+
+      // Extract the parent span from the request.
+      const parentSpan = tracer.extract(opentracing.FORMAT_HTTP_HEADERS, req.headers);
+
+      // create the new span.
+      const span = tracer.startSpan('static_image', { childOf: parentSpan });
 
       var transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
@@ -757,7 +827,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
       }
 
       var bbox = [Infinity, Infinity, -Infinity, -Infinity];
-      path.forEach(function(pair) {
+      path.forEach(function (pair) {
         bbox[0] = Math.min(bbox[0], pair[0]);
         bbox[1] = Math.min(bbox[1], pair[1]);
         bbox[2] = Math.max(bbox[2], pair[0]);
@@ -770,25 +840,25 @@ module.exports = function(options, repo, params, id, dataResolver) {
       );
 
       var z = calcZForBBox(bbox, w, h, req.query),
-          x = center[0],
-          y = center[1];
+        x = center[0],
+        y = center[1];
 
       var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
-                                  path, req.query);
+        path, req.query);
 
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
-                          res, next, overlay);
+        res, next, overlay, span);
     });
   }
 
-  app.get('/' + id + '.json', function(req, res, next) {
+  app.get('/' + id + '.json', function (req, res, next) {
     var info = clone(tileJSON);
     info.tiles = utils.getTileUrls(req, info.tiles,
-                                   'styles/' + id, info.format);
+      'styles/' + id, info.format);
     return res.send(info);
   });
 
-  return Promise.all([markerLoadPromise, fontListingPromise, renderersReadyPromise]).then(function() {
+  return Promise.all([markerLoadPromise, fontListingPromise, renderersReadyPromise]).then(function () {
     return app;
   });
 
