@@ -36,17 +36,24 @@
     "http-shutdown": "^1.2.0",
     "morgan": "1.9.0",
     "nomnom": "1.8.1",
-    "npm": "^5.7.1",
+    "npm": "^5.8.0",
     "pbf": "3.0.5",
     "proj4": "2.4.4",
+    "prom-client": "11.0.0",
     "request": "2.83.0",
     "sharp": "^0.20.0",
-    "tileserver-gl-styles": "1.2.0",
-    "prom-client": "11.0.0"
+    "tileserver-gl-styles": "1.2.0"
   },
   "devDependencies": {
+    "eslint-config-standard": "^11.0.0",
+    "eslint-plugin-import": "^2.11.0",
+    "eslint-plugin-node": "^6.0.1",
+    "eslint-plugin-promise": "^3.7.0",
+    "eslint-plugin-standard": "^3.1.0",
+    "mocha": "^3.2.0",
     "should": "^11.2.0",
     "mocha": "^3.2.0",
-    "supertest": "^3.0.0"
+    "supertest": "^3.0.0",
+    "eslint": "^4.19.1"
   }
 }
