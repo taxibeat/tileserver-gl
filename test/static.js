@@ -93,8 +93,8 @@ describe('Static endpoints', function() {
       });
 
       describe('with markers', function() {
-          testStatic(prefix, 'auto/20x20', 'png', 200, 2, /image\/png/, '?path=10,10|20,20&showMarkers=1');
-          testStatic(prefix, 'auto/20x20', 'png', 200, 2, /image\/png/, '?path=10,10|20,20&showMarkers=0');
+        testStatic(prefix, 'auto/20x20', 'png', 200, 2, /image\/png/, '?path=10,10|20,20&showMarkers=1');
+        testStatic(prefix, 'auto/20x20', 'png', 200, 2, /image\/png/, '?path=10,10|20,20&showMarkers=0');
       })
     });
 
