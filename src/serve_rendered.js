@@ -21,7 +21,7 @@ let proj4 = require('proj4');
 let request = require('request');
 
 let utils = require('./utils');
-let markerSize = 15;
+let markerSize = 12;
 let FLOAT_PATTERN = '[+-]?(?:\\d+|\\d+\.?\\d+)';
 
 let getScale = function(scale) {
@@ -63,8 +63,8 @@ function createEmptyResponse(format, color, callback) {
     callback(null, { data: cachedEmptyResponses[''] });
     return;
   }
-  var array = color.array();
-  var channels = array.length == 4 && format != 'jpeg' ? 4 : 3;
+  let array = color.array();
+  let channels = array.length == 4 && format != 'jpeg' ? 4 : 3;
   sharp(new Buffer(array), {
     raw: {
       width: 1,
@@ -129,18 +129,18 @@ module.exports = function(options, repo, params, id, dataResolver) {
       var renderer = new mbgl.Map({
         ratio: ratio,
         request: function(req, callback) {
-          var protocol = req.url.split(':')[0];
+          let protocol = req.url.split(':')[0];
           //console.log('Handling request:', req);
           if (protocol == 'sprites') {
-            var dir = options.paths[protocol];
-            var file = unescape(req.url).substring(protocol.length + 3);
+            let dir = options.paths[protocol];
+            let file = unescape(req.url).substring(protocol.length + 3);
             fs.readFile(path.join(dir, file), function(err, data) {
               callback(err, { data: data });
             });
           } else if (protocol == 'fonts') {
-            var parts = req.url.split('/');
-            var fontstack = unescape(parts[2]);
-            var range = parts[3].split('.')[0];
+            let parts = req.url.split('/');
+            let fontstack = unescape(parts[2]);
+            let range = parts[3].split('.')[0];
             utils.getFontsPbf(
               null, options.paths[protocol], fontstack, range, existingFonts
             ).then(function(concated) {
@@ -149,11 +149,11 @@ module.exports = function(options, repo, params, id, dataResolver) {
               callback(err, { data: null });
             });
           } else if (protocol == 'mbtiles') {
-            var parts = req.url.split('/');
-            var sourceId = parts[2];
-            var source = map.sources[sourceId];
-            var sourceInfo = styleJSON.sources[sourceId];
-            var z = parts[3] | 0,
+            let parts = req.url.split('/');
+            let sourceId = parts[2];
+            let source = map.sources[sourceId];
+            let sourceInfo = styleJSON.sources[sourceId];
+            let z = parts[3] | 0,
               x = parts[4] | 0,
               y = parts[5].split('.')[0] | 0,
               format = parts[5].split('.')[1];
@@ -164,7 +164,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
                 return;
               }
 
-              var response = {};
+              let response = {};
               if (headers['Last-Modified']) {
                 response.modified = new Date(headers['Last-Modified']);
               }
@@ -192,16 +192,16 @@ module.exports = function(options, repo, params, id, dataResolver) {
               encoding: null,
               gzip: true
             }, function(err, res, body) {
-              var parts = url.parse(req.url);
-              var extension = path.extname(parts.pathname).toLowerCase();
-              var format = extensionToFormat[extension] || '';
+              let parts = url.parse(req.url);
+              let extension = path.extname(parts.pathname).toLowerCase();
+              let format = extensionToFormat[extension] || '';
               if (err || res.statusCode < 200 || res.statusCode >= 300) {
                 // console.log('HTTP error', err || res.statusCode);
                 createEmptyResponse(format, '', callback);
                 return;
               }
 
-              var response = {};
+              let response = {};
               if (res.headers.modified) {
                 response.modified = new Date(res.headers.modified);
               }
@@ -231,10 +231,10 @@ module.exports = function(options, repo, params, id, dataResolver) {
     });
   };
 
-  var styleJSONPath = path.resolve(options.paths.styles, styleFile);
+  let styleJSONPath = path.resolve(options.paths.styles, styleFile);
   styleJSON = clone(require(styleJSONPath));
 
-  var httpTester = /^(http(s)?:)?\/\//;
+  let httpTester = /^(http(s)?:)?\/\//;
   if (styleJSON.sprite && !httpTester.test(styleJSON.sprite)) {
     styleJSON.sprite = 'sprites://' +
       styleJSON.sprite
@@ -245,28 +245,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
     styleJSON.glyphs = 'fonts://' + styleJSON.glyphs;
   }
 
-  var markerImages = [];
-  var markerImageNames = ['pickup', 'dropoff'];
-
-
-  var markerLoadPromise = new Promise(function(resolveCallback, rejectCallback) {
-
-    markerImageNames.forEach(function(imageName) {
-      fs.readFile(path.join(__dirname, "../public/resources/images/") + imageName + '-marker.png', function(err, fileData) {
-
-        if (err) {
-          rejectCallback(err);
-        }
-
-        var mkrImage = new Canvas.Image();
-        mkrImage.src = fileData;
-        markerImages.push(mkrImage);
-      });
-    });
-    resolveCallback();
-  });
-
-  var tileJSON = {
+  let tileJSON = {
     'tilejson': '2.0.0',
     'name': styleJSON.name,
     'attribution': '',
@@ -276,7 +255,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
     'format': 'png',
     'type': 'baselayer'
   };
-  var attributionOverride = params.tilejson && params.tilejson.attribution;
+  let attributionOverride = params.tilejson && params.tilejson.attribution;
   Object.assign(tileJSON, params.tilejson || {});
   tileJSON.tiles = params.domains || options.domains;
   utils.fixTileJSONCenter(tileJSON);
@@ -285,20 +264,20 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
   var queue = [];
   Object.keys(styleJSON.sources).forEach(function(name) {
-    var source = styleJSON.sources[name];
-    var url = source.url;
+    let source = styleJSON.sources[name];
+    let url = source.url;
 
     if (url && url.lastIndexOf('mbtiles:', 0) === 0) {
       // found mbtiles source, replace with info from local file
       delete source.url;
 
-      var mbtilesFile = url.substring('mbtiles://'.length);
-      var fromData = mbtilesFile[0] == '{' &&
+      let mbtilesFile = url.substring('mbtiles://'.length);
+      let fromData = mbtilesFile[0] == '{' &&
         mbtilesFile[mbtilesFile.length - 1] == '}';
 
       if (fromData) {
         mbtilesFile = mbtilesFile.substr(1, mbtilesFile.length - 2);
-        var mapsTo = (params.mapping || {})[mbtilesFile];
+        let mapsTo = (params.mapping || {})[mbtilesFile];
         if (mapsTo) {
           mbtilesFile = mapsTo;
         }
@@ -311,7 +290,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
       queue.push(new Promise(function(resolve, reject) {
         mbtilesFile = path.resolve(options.paths.mbtiles, mbtilesFile);
-        var mbtilesFileStats = fs.statSync(mbtilesFile);
+        let mbtilesFileStats = fs.statSync(mbtilesFile);
         if (!mbtilesFileStats.isFile() || mbtilesFileStats.size == 0) {
           throw Error('Not valid MBTiles file: ' + mbtilesFile);
         }
@@ -324,14 +303,14 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
             if (!dataProjWGStoInternalWGS && info.proj4) {
               // how to do this for multiple sources with different proj4 defs?
-              var to3857 = proj4('EPSG:3857');
-              var toDataProj = proj4(info.proj4);
+              let to3857 = proj4('EPSG:3857');
+              let toDataProj = proj4(info.proj4);
               dataProjWGStoInternalWGS = function(xy) {
                 return to3857.inverse(toDataProj.forward(xy));
               };
             }
 
-            var type = source.type;
+            let type = source.type;
             Object.assign(source, info);
             source.type = type;
             source.tiles = [
@@ -360,13 +339,13 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
   var renderersReadyPromise = Promise.all(queue).then(function() {
     // standard and @2x tiles are much more usual -> default to larger pools
-    var minPoolSizes = options.minRendererPoolSizes || [8, 4, 2];
-    var maxPoolSizes = options.maxRendererPoolSizes || [16, 8, 4];
-    for (var s = 1; s <= maxScaleFactor; s++) {
-      var i = Math.min(minPoolSizes.length - 1, s - 1);
-      var j = Math.min(maxPoolSizes.length - 1, s - 1);
-      var minPoolSize = minPoolSizes[i];
-      var maxPoolSize = Math.max(minPoolSize, maxPoolSizes[j]);
+    let minPoolSizes = options.minRendererPoolSizes || [8, 4, 2];
+    let maxPoolSizes = options.maxRendererPoolSizes || [16, 8, 4];
+    for (let s = 1; s <= maxScaleFactor; s++) {
+      let i = Math.min(minPoolSizes.length - 1, s - 1);
+      let j = Math.min(maxPoolSizes.length - 1, s - 1);
+      let minPoolSize = minPoolSizes[i];
+      let maxPoolSize = Math.max(minPoolSize, maxPoolSizes[j]);
       map.renderers[s] = createPool(s, minPoolSize, maxPoolSize);
     }
   });
@@ -397,10 +376,10 @@ module.exports = function(options, repo, params, id, dataResolver) {
       format = 'jpeg';
     }
 
-    var pool = map.renderers[scale];
+    let pool = map.renderers[scale];
     pool.acquire(function(err, renderer) {
-      var mbglZ = Math.max(0, z - 1);
-      var params = {
+      let mbglZ = Math.max(0, z - 1);
+      let params = {
         zoom: mbglZ,
         center: [lon, lat],
         bearing: bearing,
@@ -419,7 +398,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
           return;
         }
 
-        var image = sharp(data, {
+        let image = sharp(data, {
           raw: {
             width: params.width * scale,
             height: params.height * scale,
@@ -436,8 +415,8 @@ module.exports = function(options, repo, params, id, dataResolver) {
           image.overlayWith(opt_overlay);
         }
         if (watermark) {
-          var canvas = new Canvas(scale * width, scale * height);
-          var ctx = canvas.getContext('2d');
+          let canvas = new Canvas(scale * width, scale * height);
+          let ctx = canvas.getContext('2d');
           ctx.scale(scale, scale);
           ctx.font = '10px sans-serif';
           ctx.strokeWidth = '1px';
@@ -449,7 +428,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
           image.overlayWith(canvas.toBuffer());
         }
 
-        var formatQuality = (params.formatQuality || {})[format] ||
+        let formatQuality = (params.formatQuality || {})[format] ||
           (options.formatQuality || {})[format];
 
         if (format == 'png') {
@@ -475,14 +454,14 @@ module.exports = function(options, repo, params, id, dataResolver) {
   };
 
   app.get(tilePattern, function(req, res, next) {
-    var modifiedSince = req.get('if-modified-since'), cc = req.get('cache-control');
+    let modifiedSince = req.get('if-modified-since'), cc = req.get('cache-control');
     if (modifiedSince && (!cc || cc.indexOf('no-cache') == -1)) {
       if (new Date(lastModified) <= new Date(modifiedSince)) {
         return res.sendStatus(304);
       }
     }
 
-    var z = req.params.z | 0,
+    let z = req.params.z | 0,
       x = req.params.x | 0,
       y = req.params.y | 0,
       scale = getScale(req.params.scale),
@@ -491,8 +470,8 @@ module.exports = function(options, repo, params, id, dataResolver) {
       z > 20 || x >= Math.pow(2, z) || y >= Math.pow(2, z)) {
       return res.status(404).send('Out of bounds');
     }
-    var tileSize = 256;
-    var tileCenter = mercator.ll([
+    let tileSize = 256;
+    let tileCenter = mercator.ll([
       ((x + 0.5) / (1 << z)) * (256 << z),
       ((y + 0.5) / (1 << z)) * (256 << z)
     ], z);
@@ -501,12 +480,12 @@ module.exports = function(options, repo, params, id, dataResolver) {
   });
 
   var extractPathFromQuery = function(query, transformer) {
-    var pathParts = (query.path || '').split('|');
-    var path = [];
+    let pathParts = (query.path || '').split('|');
+    let path = [];
     pathParts.forEach(function(pair) {
-      var pairParts = pair.split(',');
+      let pairParts = pair.split(',');
       if (pairParts.length == 2) {
-        var pair;
+        let pair;
         if (query.latlng == '1' || query.latlng == 'true') {
           pair = [+(pairParts[1]), +(pairParts[0])];
         } else {
@@ -532,7 +511,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
     let validParams = [outerRadius, innerRadius, x, y].reduce(function(acc, element) {
       if (isNaN(element)) {
-        console.log("element: " + element  + " is invalid.");
+        console.log("element: " + element + " is invalid.");
       }
       return acc && !isNaN(element);
     }, true);
@@ -607,8 +586,8 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
     if (query.showMarkers && query.showMarkers == 1) {
       // Add the markers, if requested to do so.
-      drawMarker(ctx,precisePx(path[path.length-1],z),scale, "rgba(179, 0, 0, 0.7)");
-      drawMarker(ctx,precisePx(path[0],z),scale, "rgba(0, 151, 25, 0.7)");
+      drawMarker(ctx, precisePx(path[path.length - 1], z), scale, "rgba(100, 206, 172, .9)");
+      drawMarker(ctx, precisePx(path[0], z), scale, "rgba(0, 0, 0, .9)");
     }
 
     return canvas.toBuffer();
@@ -646,8 +625,8 @@ module.exports = function(options, repo, params, id, dataResolver) {
         FLOAT_PATTERN, FLOAT_PATTERN);
 
     app.get(util.format(staticPattern, centerPattern), function(req, res, next) {
-      var raw = req.params.raw;
-      var z = +req.params.z,
+      let raw = req.params.raw;
+      let z = +req.params.z,
         x = +req.params.x,
         y = +req.params.y,
         bearing = +(req.params.bearing || '0'),
@@ -661,35 +640,35 @@ module.exports = function(options, repo, params, id, dataResolver) {
         return res.status(400).send('Invalid zoom');
       }
 
-      var transformer = raw ?
+      let transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
 
       if (transformer) {
-        var ll = transformer([x, y]);
+        let ll = transformer([x, y]);
         x = ll[0];
         y = ll[1];
       }
 
-      var path = extractPathFromQuery(req.query, transformer);
-      var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
+      let path = extractPathFromQuery(req.query, transformer);
+      let overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
         path, req.query);
 
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
         res, next, overlay);
     });
 
-    var serveBounds = function(req, res, next) {
-      var raw = req.params.raw;
-      var bbox = [+req.params.minx, +req.params.miny,
+    let serveBounds = function(req, res, next) {
+      let raw = req.params.raw;
+      let bbox = [+req.params.minx, +req.params.miny,
       +req.params.maxx, +req.params.maxy];
-      var center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+      let center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 
-      var transformer = raw ?
+      let transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
 
       if (transformer) {
-        var minCorner = transformer(bbox.slice(0, 2));
-        var maxCorner = transformer(bbox.slice(2));
+        let minCorner = transformer(bbox.slice(0, 2));
+        let maxCorner = transformer(bbox.slice(2));
         bbox[0] = minCorner[0];
         bbox[1] = minCorner[1];
         bbox[2] = maxCorner[0];
@@ -697,25 +676,25 @@ module.exports = function(options, repo, params, id, dataResolver) {
         center = transformer(center);
       }
 
-      var w = req.params.width | 0,
+      let w = req.params.width | 0,
         h = req.params.height | 0,
         scale = getScale(req.params.scale),
         format = req.params.format;
 
-      var z = calcZForBBox(bbox, w, h, req.query),
+      let z = calcZForBBox(bbox, w, h, req.query),
         x = center[0],
         y = center[1],
         bearing = 0,
         pitch = 0;
 
-      var path = extractPathFromQuery(req.query, transformer);
-      var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
+      let path = extractPathFromQuery(req.query, transformer);
+      let overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
         path, req.query);
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
         res, next, overlay);
     };
 
-    var boundsPattern =
+    let boundsPattern =
       util.format(':minx(%s),:miny(%s),:maxx(%s),:maxy(%s)',
         FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN, FLOAT_PATTERN);
 
@@ -743,26 +722,26 @@ module.exports = function(options, repo, params, id, dataResolver) {
       return serveBounds(req, res, next);
     });
 
-    var autoPattern = 'auto';
+    let autoPattern = 'auto';
 
     app.get(util.format(staticPattern, autoPattern), function(req, res, next) {
-      var raw = req.params.raw;
-      var w = req.params.width | 0,
+      let raw = req.params.raw;
+      let w = req.params.width | 0,
         h = req.params.height | 0,
         bearing = 0,
         pitch = 0,
         scale = getScale(req.params.scale),
         format = req.params.format;
 
-      var transformer = raw ?
+      let transformer = raw ?
         mercator.inverse.bind(mercator) : dataProjWGStoInternalWGS;
 
-      var path = extractPathFromQuery(req.query, transformer);
+      let path = extractPathFromQuery(req.query, transformer);
       if (path.length < 2) {
         return res.status(400).send('Invalid path');
       }
 
-      var bbox = [Infinity, Infinity, -Infinity, -Infinity];
+      let bbox = [Infinity, Infinity, -Infinity, -Infinity];
       path.forEach(function(pair) {
         bbox[0] = Math.min(bbox[0], pair[0]);
         bbox[1] = Math.min(bbox[1], pair[1]);
@@ -770,16 +749,16 @@ module.exports = function(options, repo, params, id, dataResolver) {
         bbox[3] = Math.max(bbox[3], pair[1]);
       });
 
-      var bbox_ = mercator.convert(bbox, '900913');
-      var center = mercator.inverse(
+      let bbox_ = mercator.convert(bbox, '900913');
+      let center = mercator.inverse(
         [(bbox_[0] + bbox_[2]) / 2, (bbox_[1] + bbox_[3]) / 2]
       );
 
-      var z = calcZForBBox(bbox, w, h, req.query),
+      let z = calcZForBBox(bbox, w, h, req.query),
         x = center[0],
         y = center[1];
 
-      var overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
+      let overlay = renderOverlay(z, x, y, bearing, pitch, w, h, scale,
         path, req.query);
 
       return respondImage(z, x, y, bearing, pitch, w, h, scale, format,
@@ -788,13 +767,13 @@ module.exports = function(options, repo, params, id, dataResolver) {
   }
 
   app.get('/' + id + '.json', function(req, res, next) {
-    var info = clone(tileJSON);
+    let info = clone(tileJSON);
     info.tiles = utils.getTileUrls(req, info.tiles,
       'styles/' + id, info.format);
     return res.send(info);
   });
 
-  return Promise.all([markerLoadPromise, fontListingPromise, renderersReadyPromise]).then(function() {
+  return Promise.all([fontListingPromise, renderersReadyPromise]).then(function() {
     return app;
   });
 
