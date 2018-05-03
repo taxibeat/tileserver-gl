@@ -6,7 +6,7 @@ This fork adds features used by BEAT, including:
 
 * Marker support in the static (rendered) maps
 * Prometheus compatible `/metrics` endpoint
-* Improved `/health/` endpoint
+* Improved `/health` endpoint
 
 
 ## Documentation
