@@ -2,7 +2,7 @@
 <Capabilities xmlns="http://www.opengis.net/wmts/1.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/wmts/1.0 http://schemas.opengis.net/wmts/1.0/wmtsGetCapabilities_response.xsd" version="1.0.0">
   <!-- Service Identification -->
   <ows:ServiceIdentification>
-    <ows:Title>WMTSGate</ows:Title>
+    <ows:Title>TileServer GL</ows:Title>
     <ows:ServiceType>OGC WMTS</ows:ServiceType>
     <ows:ServiceTypeVersion>1.0.0</ows:ServiceTypeVersion>
   </ows:ServiceIdentification>
@@ -11,7 +11,7 @@
     <ows:Operation name="GetCapabilities">
       <ows:DCP>
         <ows:HTTP>
-          <ows:Get xlink:href="http://wmts.maptiler.com/aHR0cDovL2xvY2FsaG9zdC9zdHlsZXMva2xva2FudGVjaC1iYXNpYy5qc29u/wmts">
+          <ows:Get xlink:href="{{baseUrl}}/wmts/{{id}}/">
             <ows:Constraint name="GetEncoding">
               <ows:AllowedValues>
                 <ows:Value>RESTful</ows:Value>
@@ -24,7 +24,7 @@
     <ows:Operation name="GetTile">
       <ows:DCP>
         <ows:HTTP>
-          <ows:Get xlink:href="http://localhost/styles/">
+          <ows:Get xlink:href="{{baseUrl}}/styles/">
             <ows:Constraint name="GetEncoding">
               <ows:AllowedValues>
                 <ows:Value>RESTful</ows:Value>
@@ -37,8 +37,8 @@
   </ows:OperationsMetadata>
   <Contents>
       <Layer>
-      <ows:Title>localhost</ows:Title>
-      <ows:Identifier>localhost</ows:Identifier>
+      <ows:Title>{{name}}</ows:Title>
+      <ows:Identifier>{{id}}</ows:Identifier>
       <ows:WGS84BoundingBox crs="urn:ogc:def:crs:OGC:2:84">
         <ows:LowerCorner>-180 -85.051128779807</ows:LowerCorner>
         <ows:UpperCorner>180 85.051128779807</ows:UpperCorner>
@@ -50,7 +50,7 @@
       <TileMatrixSetLink>
         <TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>
       </TileMatrixSetLink>
-      <ResourceURL format="image/png" resourceType="tile" template="http://localhost/styles/{TileMatrix}/{TileCol}/{TileRow}.png"/>
+      <ResourceURL format="image/png" resourceType="tile" template="{{baseUrl}}/styles/{{id}}/{TileMatrix}/{TileCol}/{TileRow}.png"/>
     </Layer><TileMatrixSet>
       <ows:Title>GoogleMapsCompatible</ows:Title>
       <ows:Abstract>GoogleMapsCompatible EPSG:3857</ows:Abstract>
@@ -403,5 +403,5 @@
         <MatrixHeight>262144</MatrixHeight>
       </TileMatrix></TileMatrixSet>
   </Contents>
-  <ServiceMetadataURL xlink:href="http://wmts.maptiler.com/aHR0cDovL2xvY2FsaG9zdC9zdHlsZXMva2xva2FudGVjaC1iYXNpYy5qc29u/wmts"/>
+  <ServiceMetadataURL xlink:href="{{baseUrl}}/wmts/{{id}}/"/>
 </Capabilities>
