@@ -23,7 +23,7 @@ Rendered tiles
 
 WMTS Capabilities
 ==============
-* WMTS Capabilities are served at ``/wmts/{id}/``
+* WMTS Capabilities are served at ``/styles/{id}/wmts.xml``
 
 Static images
 =============
