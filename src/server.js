@@ -274,7 +274,7 @@ function start(opts) {
           data['key_query_part'] =
               req.query.key ? 'key=' + req.query.key + '&amp;' : '';
           data['key_query'] = req.query.key ? '?key=' + req.query.key : '';
-          if(template === 'wmts')res.set('Content-Type', 'text/xml');
+          if (template === 'wmts') res.set('Content-Type', 'text/xml');
           return res.status(200).send(compiled(data));
         });
         resolve();
@@ -381,8 +381,8 @@ function start(opts) {
     if (!wmts) {
       return null;
     }
-    if(wmts.hasOwnProperty("serve_rendered")&!wmts.serve_rendered){
-    return null;
+    if (wmts.hasOwnProperty("serve_rendered") && !wmts.serve_rendered) {
+      return null;
     }
     wmts.id = id;
     wmts.name = (serving.styles[id] || serving.rendered[id]).name;
