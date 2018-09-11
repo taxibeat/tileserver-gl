@@ -7,8 +7,7 @@ process.env.UV_THREADPOOL_SIZE =
 var fs = require('fs'),
     path = require('path');
 
-var base64url = require('base64url'),
-    clone = require('clone'),
+var clone = require('clone'),
     cors = require('cors'),
     enableShutdown = require('http-shutdown'),
     express = require('express'),
