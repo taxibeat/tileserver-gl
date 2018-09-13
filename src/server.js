@@ -301,12 +301,7 @@ function start(opts) {
               Math.floor(centerPx[0] / 256) + '/' +
               Math.floor(centerPx[1] / 256) + '.png';
         }
-
-        var query = req.query.key ? ('?key=' + req.query.key) : '';
-        style.wmts_link = 'http://wmts.maptiler.com/' +
-          base64url('http://' + req.headers.host +
-            '/styles/' + id + '.json' + query) + '/wmts';
-
+        
         var tiles = utils.getTileUrls(
             req, style.serving_rendered.tiles,
             'styles/' + id, style.serving_rendered.format);
