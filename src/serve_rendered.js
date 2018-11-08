@@ -502,7 +502,7 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
   var drawMarker = function(ctx, coordinates, scale, outerColour = "rgb(0,0,0)", innerColour = "rgb(255,255,255)", outerRadius = markerSize, innerRadius = markerSize * 0.35) {
 
-    [outerRadius, innerRadius, coordinates[0], coordinates[1]].map(console.log);
+    //[outerRadius, innerRadius, coordinates[0], coordinates[1]].map(console.log);
 
     outerRadius = parseInt(outerRadius);
     innerRadius = parseInt(innerRadius);
