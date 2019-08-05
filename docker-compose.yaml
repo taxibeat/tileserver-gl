@@ -1,0 +1,10 @@
+version: "3.3"
+
+services:
+
+  tileserver:
+    image: tileserver
+    build: .
+    container_name: tileserver
+    ports:
+      - "80:80"
