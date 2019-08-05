@@ -586,7 +586,12 @@ module.exports = function(options, repo, params, id, dataResolver) {
 
     if (query.showMarkers && query.showMarkers == 1) {
       // Add the markers, if requested to do so.
-      drawMarker(ctx, precisePx(path[path.length - 1], z), scale, "rgba(100, 206, 172, .9)");
+      if (query.cancelledRide && query.cancelledRide == 1) {
+        // Check if markers are for cancelled ride
+        drawMarker(ctx, precisePx(path[path.length - 1], z), scale, "rgba(140, 140, 158, .9)", "rgba(0, 0, 0, 0.9)");
+      } else {
+        drawMarker(ctx, precisePx(path[path.length - 1], z), scale, "rgba(100, 206, 172, .9)");
+      }
       drawMarker(ctx, precisePx(path[0], z), scale, "rgba(0, 0, 0, .9)");
     }
 
