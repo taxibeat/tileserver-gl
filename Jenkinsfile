@@ -7,7 +7,7 @@ node('slave') {
 
     // Clone Repo
     stage('Clone repository') {
-      checkout(scm)
+      checkout scm
     }
 
     // Build image
